@@ -1,12 +1,6 @@
-from fileinput import close
-import pickle
 import torch
-import torch.nn as nn
-import torch.optim as optim
 import os
 import cv2
-import time
-import matplotlib.pyplot as plt
 from PIL import Image
 import numpy as np
 import h5py
@@ -19,16 +13,13 @@ class Low_level_planner:
     low-level planner, responsible for executing action sequences
     '''
 
-    def __init__(self, state_dim, action_dim, cfg, cur_models_dir, cur_demo_dir=None, scenario='Calvin', VLM=True,
-                 ROBOMIMIC=False):
+    def __init__(self, cfg):
         '''
         state_dim: the dimension of the state vector 39
         action_dim: the dimension of the action vector 9
         cur_models_dir: the dir where all trained models that you currently want to use (BC, BC_RNN, etc.)
         '''
-        # low-level planner 不负责训练，只负责执行, <--(Zhixu: 所以我们把trainner放到了外面，然后trainner就不需要和simulator交互了)
-        self.enable_VLM = VLM
-        self.max_step = 160  # 最大步数
+        self.max_step = 100  # 最大步数
         self.models = {}
         self.task_ids = []
 
@@ -37,14 +28,14 @@ class Low_level_planner:
 
         self.annotator = None
         self.video = None
-        self.models_dir = cur_models_dir
+        self.models_dir = "./model_epoch_50.pth"  # 模型路径
+        self.cur_demo_dir= "./env_demo.hdf5"  # 演示数据路径
         self.action= None
-        self.cur_demo_dir = cur_demo_dir
+
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.load_models(ROBOMIMIC=ROBOMIMIC)
-        self.ROBOMIMIC = ROBOMIMIC
+        self.load_models()
         self.simulator = self.get_simulator(cfg)
-        self.scenario = scenario
+
         self.previous_action = None
         self.obs = {  # 初始化用于存储观测数据的字典，结构保持与解析时一致
             'robot_obs': {
@@ -75,26 +66,8 @@ class Low_level_planner:
                 }
             }
         }
-        # Initialize previous states for object position estimation
-        self.object_positions = {
-            'sliding_door': None,
-            'drawer': None,
-            'button': None,
-            'switch': None,
-            'red_block': None,
-            'blue_block': None,
-            'pink_block': None
-        }
-        self.position_buffers = {
-            'sliding_door': [],
-            'drawer': [],
-            'button': [],
-            'switch': []
-        }
-        self.start_action = [-0.1004, -0.1992, 0.6037, 2.996, -0.598, 1.9144, -1]
-        self.finish_detector = TaskFinishDetector() # 初始化完成检测器
 
-    def Low_level_testing(self, Primitive_seq, PRINT=True, Test_simulator=False):
+    def Low_level_testing(self, Primitive_seq):
         '''
         receive the primitive sequence from high-level planner
         return state_sequence, action_sequence
@@ -106,26 +79,6 @@ class Low_level_planner:
         #action_sequence = []  # 存储动作序列
         self.step = 0  # 初始化 step 计数器
 
-
-
-        self.button_action = [-0.104,-0.117,0.489,-3.114,-0.154,2.010, -1]
-        self.object_positions["button"] = [-0.104,-0.117,0.489]
-
-        self.drawer_action = [0.164,-0.374,0.371,-3.130,0.032,1.383,-1]
-        self.object_positions["drawer"] = [0.164,-0.374,0.371]
-
-        self.slider_action = [0.0847, -0.204, 0.565,3.061,0.039,1.598,-1]
-        self.object_positions["slider"] = [0.0847, -0.204, 0.565]
-
-        self.switch_action = [0.209, 0.0402, 0.602,3.113,-0.192,1.348,-1]
-        self.object_positions["switch"] = [0.209, 0.0402, 0.602]
-        if self.enable_VLM:
-            pass
-            # self.annotator=DataSegmentor()
-        else:
-            self.annotator = None
-        self.PRINT = PRINT
-
         # 在这里读入两个obs，robot_obs=None, scene_obs=None
         step_cnt = 0
 
@@ -133,196 +86,66 @@ class Low_level_planner:
         cur_obs = self.simulator.reset(scene_obs=scene_obs, robot_obs=robo_obs)
 
         self.parse_obs(cur_obs)
-        #self.state = self.get_state_from_obs(cur_obs)
+        while True:
+            action = None
 
-        # debug使用，正常情况下注释掉
+            """action: 7-dim vector"""
+            cur_model = self.load_policy()  # load corresponding model by primitive_id (task_id)
+            #state = self.state
 
-        #state_sequence.append(self.state.copy())  # 将初始状态加入状态序列
-
-        if Primitive_seq!=None:
-            # 遍历每个 primitive 操作
-            for primitive in Primitive_seq.states:
-                # 提取每个字段
-                primitive_type = primitive.get('primitive', '')
-                # use our model
-                if not Test_simulator:
-                    print(f"=========Executing primitive: {primitive_type}\n")
-                    obj = primitive.get('object', '')
-                    parameters = primitive.get('parameter', None)
-                    end_conditions = primitive.get('end_conditions', None)
-                    if primitive_type == "turn_on_led":
-                        end_conditions = "the green light turned on"
-                    # 直接在此处解析对象字符串，将其分割为列表
-                    objects = [o.strip() for o in obj.split(',')] if obj else []
-
-                next_primitive = False
-                while next_primitive == False:
-                    action = None
-
-                    """action: 7-dim vector"""
-
-                    if primitive_type == "Move":
-
-                        continue
-                        # 设置目标位置为 button_pos
-                        target_position = self.button_pos  # [-0.11729692647375761, -0.11725398572585305, 0.4914268888533775, 2.923246981381861, -0.13146313502893184, 1.8595815098636201]
-                        # 设定默认角度和抓手状态
-
-                        default_gripper = 1  # gripper 使用默认值 -1（关闭状态）
-                        # 创建 action 数组，包含位置、角度和抓手状态
-                        action = target_position + [default_gripper]
-                        # 将 action 转换为 numpy 数组格式
-                        action = np.array(action)
-                        print(f"Action for Move: {action}")
-
-                    else:
-                        cur_model = self.load_policy(primitive_type)  # load corresponding model by primitive_id (task_id)
-                        #state = self.state
-
-                        # 获取机器人观测输入数据
-                        input_scene_obs = self.obs['original_scene_obs']
-                        input_robot_obs = self.obs['original_robot_obs']
-                        tcp_position = self.obs['robot_obs']['tcp_position']  # 形状 (3,)
-                        tcp_orientation = self.obs['robot_obs']['tcp_orientation']  # 形状 (3,)
-                        gripper_opening_width = self.obs['robot_obs']['gripper_opening_width']  # 形状 (1,)
-                        button_state = self.obs['scene_obs']['button_state'] = scene_obs[2]  # 按钮状态
-                        green_light_state = self.obs['scene_obs']['green_light_state'] = scene_obs[5]
+            # 获取机器人观测输入数据
+            input_scene_obs = self.obs['original_scene_obs']
+            input_robot_obs = self.obs['original_robot_obs']
+            tcp_position = self.obs['robot_obs']['tcp_position']  # 形状 (3,)
+            tcp_orientation = self.obs['robot_obs']['tcp_orientation']  # 形状 (3,)
+            gripper_opening_width = self.obs['robot_obs']['gripper_opening_width']  # 形状 (1,)
+            button_state = self.obs['scene_obs']['button_state'] = scene_obs[2]  # 按钮状态
+            green_light_state = self.obs['scene_obs']['green_light_state'] = scene_obs[5]
 
 
-                        #print("\n\n\n block pink\n\n\n", pink_block)
-                        #print(f"tcp_position: {tcp_position}, tcp_orientation: {tcp_orientation}, gripper_opening_width: {gripper_opening_width}")
-                        # print(f"tcp_position: {tcp_position}, tcp_orientation: {tcp_orientation}, gripper_opening_width: {gripper_opening_width}")
+            #print("\n\n\n block pink\n\n\n", pink_block)
+            #print(f"tcp_position: {tcp_position}, tcp_orientation: {tcp_orientation}, gripper_opening_width: {gripper_opening_width}")
+            # print(f"tcp_position: {tcp_position}, tcp_orientation: {tcp_orientation}, gripper_opening_width: {gripper_opening_width}")
 
-                        # 计算 tcp 到物体的距离
-                        # @Zhixu，如果出问题，暂时注释掉
-                        tcp_obj_pink_distance = self.get_tcp_obj_distance(tcp_position, pink_block) # pink_block形状为(6,)，但是函数只提取前三维度，所以不影响
+            # 计算 tcp 到物体的距离
+            # @Zhixu，如果出问题，暂时注释掉
 
-                        # 创建输入字典，键名与模型输入键匹配
-                        input_data = {
-                            "robot0_eef_euler": torch.tensor(tcp_orientation, dtype=torch.float32).to(self.device),
-                            "robot0_eef_pos": torch.tensor(tcp_position, dtype=torch.float32).to(self.device),
-                            "robot0_gripper_qpos": torch.tensor([gripper_opening_width], dtype=torch.float32).to(
-                                self.device),
-                        }
+            # 创建输入字典，键名与模型输入键匹配
+            input_data = {
+                "robot0_eef_euler": torch.tensor(tcp_orientation, dtype=torch.float32).to(self.device),
+                "robot0_eef_pos": torch.tensor(tcp_position, dtype=torch.float32).to(self.device),
+                "robot0_gripper_qpos": torch.tensor([gripper_opening_width], dtype=torch.float32).to(
+                    self.device),
+            }
 
-                        # # 获取模型预测的动作和演示动作
-                        action = cur_model(input_data)  # 模型预测的动作
-                        demo_action, assemble_action, _, _ = self.test_hdf5(step_cnt)  # 演示动作
+            # # 获取模型预测的动作和演示动作
+            action = cur_model(input_data)  # 模型预测的动作
+            demo_action, assemble_action, _, _ = self.test_hdf5(step_cnt)  # 演示动作
 
-                        # demo_action, assemble_action, _, _ = self.test_hdf5(step_cnt)  # 演示动作
-                        step_cnt += 1
-                        # MARK: To test demo
-                        action=demo_action
+            # demo_action, assemble_action, _, _ = self.test_hdf5(step_cnt)  # 演示动作
+            step_cnt += 1
+            # MARK: To test demo
+            #action=demo_action
 
-                    self.step += 1
-                    #print(f"------------The action input is {action}")
-                    action = self.gripper_action_binary(action)
-                    cur_obs, info = self.simulator.run_a_step(action)
-                    self.parse_obs(cur_obs)
-                    #self.state = self.get_state_from_obs(cur_obs)
+            self.step += 1
+            #print(f"------------The action input is {action}")
+            action = self.gripper_action_binary(action)
+            cur_obs, info = self.simulator.run_a_step(action)
+            self.parse_obs(cur_obs)
+            #self.state = self.get_state_from_obs(cur_obs)
 
-                    #state_sequence.append(self.state.copy())  # 将新状态加入状态序列
-                    #action_sequence.append(action.copy())  # 将动作加入动作序列
+            #state_sequence.append(self.state.copy())  # 将新状态加入状态序列
+            #action_sequence.append(action.copy())  # 将动作加入动作序列
 
-                    if step_cnt >= self.max_step:
-                        #self.callback_save_print(state_sequence, action_sequence, primitive_type)
-                        exit(
-                            f"Failure case on primitive {primitive_type}, exceed {self.max_step} steps but sill didn't reach the end condition")
+            if self.obs['scene_obs']['green_light_state'] == 1:
+                return True
 
-                    if self.obs['robot_obs']['tcp_position'] + self.obs['robot_obs'][
-                        'tcp_orientation'] == self.button_pos:
-                        next_primitive = True
-                    else:
-                        next_primitive = False
+            if step_cnt >= self.max_step:
+                return False
 
 
-        else:
-            policy_ctl = False
-            t_cnt=0
-            #TODO this branch is just for testing
-            while True:
-                action = None
-                """action: 7-dim vector"""
-                primitive_type= "rotate_pink_block_right"
-                target_name="pink_block"
-                target_pos=self.object_positions[target_name]
-                cur_pos=self.obs['robot_obs']['tcp_position']
 
-                # 检查任务是否完成, todo: 需要根据具体任务修改
-                # if self.finish_detector.check_finish(primitive_type, self.obs, self.initial_obs, self.obs['robot_obs']):
-                #     break
 
-                if self.close_enough(cur_pos,target_pos,policy_ctl) == True:
-                    policy_ctl=True
-                    #TODO: for testing only
-                    print(f"Now let policy to control the robot")
-                    cur_model = self.load_policy(primitive_type)  # load corresponding model by primitive_id (task_id)
-                    # 获取机器人观测输入数据
-                    input_scene_obs = self.obs['original_scene_obs']
-                    input_robot_obs = self.obs['original_robot_obs']
-                    tcp_position = self.obs['robot_obs']['tcp_position']  # 形状 (3,)
-                    tcp_orientation = self.obs['robot_obs']['tcp_orientation']  # 形状 (3,)
-                    gripper_opening_width = self.obs['robot_obs']['gripper_opening_width']  # 形状 (1,)
-                    arm_joint_states = self.obs['robot_obs']['arm_joint_states']
-                    button_state = self.obs['scene_obs']['button_state'] = scene_obs[2]  # 按钮状态
-                    green_light_state = self.obs['scene_obs']['green_light_state'] = scene_obs[5]
-                    pink_block = self.obs['scene_obs']['pink_block'] # 粉色方块的位置, 形状 (6,)
-                    # print("\n\n\n block pink\n\n\n", pink_block)
-                    #print(f"tcp_position: {tcp_position}, tcp_orientation: {tcp_orientation}, gripper_opening_width: {gripper_opening_width}")
-                    # print(f"tcp_position: {tcp_position}, tcp_orientation: {tcp_orientation}, gripper_opening_width: {gripper_opening_width}")
-
-                    # 计算 tcp 到物体的距离
-                    # @Zhixu，如果出问题，暂时注释掉
-                    tcp_obj_pink_distance = self.get_tcp_obj_distance(tcp_position, pink_block)
-
-                    # 创建输入字典，键名与模型输入键匹配
-                    input_data = {
-                        "robot0_eef_euler": torch.tensor(tcp_orientation, dtype=torch.float32).to(self.device),
-                        "robot0_eef_pos": torch.tensor(tcp_position, dtype=torch.float32).to(self.device),
-                        "robot0_gripper_qpos": torch.tensor([gripper_opening_width], dtype=torch.float32).to(
-                            self.device),
-                        # @Zhixu 如果出现问题，暂时注释掉
-                        "pink_block": torch.tensor(pink_block, dtype=torch.float32).to(self.device),
-                        "eef_to_block_pink_pos": torch.tensor([tcp_obj_pink_distance], dtype=torch.float32).to(self.device)  # 加入距离信息
-
-                        # "block_blue": torch.tensor(block_blue, dtype=torch.float32).to(self.device),
-                        # "eef_to_block_blue_pos": torch.tensor([tcp_obj_blue_distance], dtype=torch.float32).to(self.device)  # 加入距离信息
-
-                        # "block_red": torch.tensor(block_red, dtype=torch.float32).to(self.device),
-                        # "eef_to_block_red_pos": torch.tensor([tcp_obj_red_distance], dtype=torch.float32).to(self.device)  # 加入距离信息
-
-                        # "green_light_state": torch.tensor([green_light_state], dtype=torch.float32).to(self.device),
-                        # "button_state": torch.tensor([button_state], dtype=torch.float32).to(self.device)
-                    }
-
-                    # # 获取模型预测的动作和演示动作
-                    action = cur_model(input_data)  # 模型预测的动作
-                    demo_action, assemble_action, _, _ = self.test_hdf5(step_cnt)  # 演示动作
-
-                    # demo_action, assemble_action, _, _ = self.test_hdf5(step_cnt)  # 演示动作
-                    step_cnt += 1
-                    # MARK: To test demo
-                    #action=demo_action
-
-                    self.apply_action(action, act_type="cartesian_rel")
-                else:
-
-                    print(f"...Heuristically moving to the target position...")
-                    action=self.move_generator(self.object_positions[target_name])
-                    self.apply_action(action, act_type="cartesian_abs")
-                self.step += 1
-                #if self.obs['scene_obs']['green_light_state'] !=self.pre_green_light_state:
-                    #return True
-                tolerance=1e-3
-                if abs(self.obs['scene_obs']['pink_block'][2]-self.pre_pink_z_axis)>tolerance:
-                    print(f"The diff: {self.obs['scene_obs']['pink_block'][2]} and {self.pre_pink_z_axis}")
-                    t_cnt+=1
-                    if t_cnt>=5:
-                        return True
-
-                #self.apply_action(action, act_type="cartesian_rel")
-                if self.step >= self.max_step:
-                    return False
 
 
     def apply_action(self, action, act_type="cartesian_rel"):
@@ -422,53 +245,6 @@ class Low_level_planner:
             print(f"Error loading HDF5 file: {e}")
 
         # 保证即使出错，也返回初始化的值
-        return action_step, assembled_action, rst_robo_obs, rst_scene_obs
-
-    def old_test_hdf5(self, step_cnt):
-        """
-        Load episode data from HDF5 file and print scene_obs, robot_obs, and actions for a specific step.
-
-        Args:
-            hdf5_file_path (str): Path to the HDF5 file.
-            step_cnt (int): Step number to extract data for.
-        """
-        rst = None
-        try:
-            # 打开HDF5文件
-
-            if self.cur_demo_dir:
-                hdf5_file_path = self.cur_demo_dir
-            else:
-                exit("no hdf5 file input")
-
-            with h5py.File(hdf5_file_path, 'r') as f:
-                # 解析data组
-                data_group = f['data']
-                demo_name = list(data_group.keys())[0]  # 选择第一个demo，假设只有一个
-                # print(f"~~~!!!~~~!!!~~~!!!~~~Demo name: {demo_name}")
-                demo_group = data_group[demo_name]
-
-                # 解析actions, robot_obs, scene_obs
-                actions = demo_group['actions'][()]
-                robot_obs = demo_group['obs/robot_obs'][()]
-                scene_obs = demo_group['obs/scene_obs'][()]
-                rst_robo_obs = robot_obs[step_cnt]
-                rst_scene_obs = scene_obs[step_cnt]
-
-                # 使用 .item() 来将单元素张量转为标量
-                # 直接读取 action 的特定步骤数据
-                action_step = actions[step_cnt]
-
-                # 检查数据是否需要重新排列
-                tcp_pos = action_step[:3]  # 假设前 3 个元素是位置
-                tcp_orientation = action_step[3:6]  # 假设中间 3 个元素是角度
-                gripper_action = action_step[6:]  # 最后一个元素是抓手动作
-
-                # 重新排列顺序（如果需要修正原有顺序，例如位置和角度反了的情况）
-                assembled_action = np.concatenate((tcp_orientation, tcp_pos, gripper_action))
-
-        except Exception as e:
-            print(f"Error loading HDF5 file: {e}")
         return action_step, assembled_action, rst_robo_obs, rst_scene_obs
 
     def parse_obs(self, obs):
@@ -713,45 +489,26 @@ class Low_level_planner:
         return simulator
 
 
-    def load_policy(self, primitive_id):
-        '''load corresponding model by primitive_id (task_id)'''
-        assert primitive_id in self.task_ids, f"Invalid task_id: {primitive_id}"
-        model = self.models[primitive_id]
-        if self.ROBOMIMIC:
-            model.start_episode()
-        else:
-            model.eval()  # Set the model to evaluation mode
+    def load_policy(self):
+        model = self.model
+        model.eval()  # Set the model to evaluation mode
         return model
 
-
-    def load_models(self, ROBOMIMIC=False):
+    def load_models(self):
         '''Load all trained models and recognize task_ids'''
         model_path = self.models_dir
-        # print(f"self.models_dir: {self.models_dir}")
         print(f"..........................Loading ROBOMIMIC model from {model_path}..........................")
         try:
-            task_id = "turn_on_led"  # 可以根据情况动态生成 task_id
-            # device
             device = TorchUtils.get_torch_device(try_to_use_cuda=True)
             # restore policy
             policy, ckpt_dict = FileUtils.policy_from_checkpoint(ckpt_path=model_path, device=device, verbose=True)
-            self.models[task_id] = policy
-            self.task_ids.append(task_id)
-            task_id = "rotate_pink_block_right"
-            self.task_ids.append(task_id)
+            self.model = policy
         except Exception as e:
             print(f"Error loading ROBOMIMIC model from {model_path}")
             print(f"Error details: {str(e)}")
             raise RuntimeError(f"Failed to load ROBOMIMIC model from {model_path}") from e
 
-        # 打印已加载的模型信息
-        if task_id in self.models:
-            print(f"\n--- 1 ROBOMIMIC model successfully loaded ---\n")
-            print(f"Loaded model: {task_id}")
-        else:
-            print("No ROBOMIMIC model was loaded. Please check the model path.")
-
-            return self.models
+        return self.model
 
 
 # test script

@@ -1,16 +1,30 @@
-# 这是一个示例 Python 脚本。
-
-# 按 ⌃+R 执行或将其替换为您的代码。
-# 按 双击 Shift 在所有地方搜索类、文件、工具窗口、操作和设置。
-
-
-def print_hi(name):
-    # 在下面的代码行中使用断点来调试脚本。
-    print(f'Hi, {name}')  # 按 ⌘+F8 切换断点。
+import argparse  # 导入 argparse 模块，用于命令行参数解析
+from Ours_code.Environment import Environment
+import hydra  # 导入 Hydra 库，用于配置管理
+from omegaconf import OmegaConf
+from hydra import initialize, compose
 
 
-# 按装订区域中的绿色按钮以运行脚本。
+def load_config():
+    # 初始化 Hydra 并指定配置文件路径
+    with initialize(config_path="./calvin/calvin_env/conf"):
+        # 手动加载指定的配置文件
+        cfg = compose(config_name="config_data_collection")
+        print(OmegaConf.to_yaml(cfg))  # 打印配置内容以进行验证
+    return cfg
+
+
+# 使用 Hydra 进行配置
+def main():
+    # 加载配置
+    cfg = load_config()
+
+
+
+    # 创建 Environment 实例并运行
+    env = Environment(cfg=cfg)
+    env.run()
+
+
 if __name__ == '__main__':
-    print_hi('PyCharm')
-
-# 访问 https://www.jetbrains.com/help/pycharm/ 获取 PyCharm 帮助
+    main()

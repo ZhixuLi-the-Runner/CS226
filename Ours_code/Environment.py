@@ -1,61 +1,13 @@
-import copy
-import numpy as np
-import os
-import re
-import ast
-import pickle
-from Ours_code.High_level_planner import High_level_planner
 from Ours_code.Testing import Low_level_planner
-from Ours_code.Data_Processing import get_tasks
-
-
 
 class Environment:
-    def __init__(self,task_input_path, obj_input_path,output_path,primitive_path ,cur_model_dir, model,cur_demo_dir=None,PRINT = True, mode="training",cfg=None, scenario="Real_World", high_level=False):
-        self.environment=None
-        self.action_space=None
-        self._mode=mode
-
-        self.current_task=None
-        self.current_state=None
-        self.test_h=high_level
-        self.obj_input_path=obj_input_path
-        self.task_input_path = task_input_path
-
-        self.output_path=output_path
-        self.model=model
-        self.PRINT=PRINT
+    def __init__(self,cfg=None):
         self.cfg=cfg
-        self.hplanner = High_level_planner(check_semantic=True, check_syntactic=True,primitive_path=primitive_path,output_path=self.output_path,
-                                           model_name=self.model, PRINT=self.PRINT,scenario=scenario)
-        self.lplanner = Low_level_planner(state_dim=39, action_dim=7,cfg=self.cfg,cur_models_dir=cur_model_dir,cur_demo_dir=cur_demo_dir ,VLM=False, ROBOMIMIC=True)
-
-        self.tasks = get_tasks(self.task_input_path)
+        self.lplanner = Low_level_planner(cfg=self.cfg)
         return
 
 
 
-    #TODO For testing
-    def save_primitive_seqs(self, primitive_seqs, file_path):
-        """保存 Primitive_seqs 到文件"""
-        with open(file_path, 'wb') as file:
-            pickle.dump(primitive_seqs, file)
-
-    #TODO For testing
-    def load_primitive_seqs(self, file_path):
-        """从文件加载 Primitive_seqs"""
-        with open(file_path, 'rb') as file:
-            return pickle.load(file)
-
-    """
-    Run a single step
-    """
-    def run_a_step(self):
-        return
-
-    """
-    Run both level planning to to execute the task
-    """
     def run(self):
         result_log='Result/Logs.txt'
         Is_success = self.lplanner.Low_level_testing(None)
@@ -86,5 +38,3 @@ class Environment:
         #             raise ValueError("Invalid mode type")
         
         return
-
-
