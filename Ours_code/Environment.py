@@ -32,7 +32,7 @@ class Environment:
         #
         #     """Here the Primitive_seqs[task_index] is a primitive sequences"""
         #     for task_index, Primitive_per_task in enumerate(Primitive_seqs):
-        #         if self._mode=='testing':
+        #         if self._mode=='testing_demos':
         #             self.lplanner.Low_level_testing(Primitive_per_task)
         #         else:
         #             raise ValueError("Invalid mode type")

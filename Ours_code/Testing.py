@@ -4,7 +4,7 @@ import cv2
 from PIL import Image
 import numpy as np
 import h5py
-from calvin_env.calvin_env.envs.play_table_env import Simulator
+from calvin.calvin_env.calvin_env.envs.play_table_env import Simulator
 import robomimic.utils.file_utils as FileUtils
 import robomimic.utils.torch_utils as TorchUtils
 
@@ -28,7 +28,7 @@ class Low_level_planner:
 
         self.annotator = None
         self.video = None
-        self.models_dir = "./model_epoch_50.pth"  # 模型路径
+        self.models_dir = "./model_epoch_200.pth"  # 模型路径
         self.cur_demo_dir= "./env_demo.hdf5"  # 演示数据路径
         self.action= None
 
@@ -149,7 +149,7 @@ class Low_level_planner:
 
 
     def apply_action(self, action, act_type="cartesian_rel"):
-        #print(f"------------The action input is {action}")
+        print(f"------------The action input is {action}")
         action = self.gripper_action_binary(action)
         cur_obs, info = self.simulator.run_a_step(action,act_type)
         self.action = action
@@ -294,10 +294,6 @@ class Low_level_planner:
             self.obs['scene_obs']['pink_block'] = scene_obs[18:24].tolist()
             if self.step == 0:
                 self.pre_pink_z_axis = self.obs['scene_obs']['pink_block'][2]
-            self.object_positions['red_block'] = self.obs['scene_obs']['red_block'][0:3]
-
-            self.object_positions['blue_block'] = self.obs['scene_obs']['blue_block'][0:3]
-            self.object_positions['pink_block'] = self.obs['scene_obs']['pink_block'][0:3]
 
         # 确保保存路径存在
         save_path = "Result/Image"
@@ -352,67 +348,6 @@ class Low_level_planner:
         # Call function to estimate object positions
 
 
-    # def estimate_object_positions(self):
-    #     """
-    #     Estimate object positions based on changes in the scene_obs and TCP position.
-    #     """
-    #     # Current robot TCP position
-    #     tcp_position = self.obs['robot_obs'].get('tcp_position', [])
-    #     changed_sliding_door=False
-    #     changed_drawer=False
-    #     changed_button=Falseged_drawer=False
-    #     changed_switch=False
-    #     if tcp_position:
-    #         # Check if sliding door state changed
-    #         if self.obs['scene_obs']['sliding_door_state'] != self.previous_states['sliding_door_state']:
-    #             self.previous_states['sliding_door_state'] = self.obs['scene_obs']['sliding_door_state']
-    #             self.position_buffers['sliding_door'].append(tcp_position)
-    #             changed_sliding_door=True
-    #             print(f"<<<<<<<<<<<sliding door state changed")
-    #             print(f"Sliding Door State: {self.obs['scene_obs']['sliding_door_state']}")
-    #             print(f"The action is {self.action}")
-    #
-    #         # Check if drawer state changed
-    #         if self.obs['scene_obs']['drawer_state'] != self.previous_states['drawer_state']:
-    #             self.previous_states['drawer_state'] = self.obs['scene_obs']['drawer_state']
-    #             self.position_buffers['drawer'].append(tcp_position)
-    #             changed_drawer=True
-    #             print(f"<<<<<<<<<<<drawer state changed")
-    #             print(f"Drawer State: {self.obs['scene_obs']['drawer_state']}")
-    #             print(f"The action is {self.action}")
-    #
-    #         # Check if button state changed
-    #         if self.obs['scene_obs']['button_state'] != self.previous_states['button_state']:
-    #             self.previous_states['button_state'] = self.obs['scene_obs']['button_state']
-    #             self.position_buffers['button'].append(tcp_position)
-    #             changed_button=True
-    #             print(f"<<<<<<<<<<<button state changed")
-    #             print(f"Button State: {self.obs['scene_obs']['button_state']}")
-    #             print(f"The action is {self.action}")
-    #
-    #         # Check if switch state changed
-    #         if self.obs['scene_obs']['switch_state'] != self.previous_states['switch_state']:
-    #             self.previous_states['switch_state'] = self.obs['scene_obs']['switch_state']
-    #             self.position_buffers['switch'].append(tcp_position)
-    #             changed_switch=True
-    #             print(f"<<<<<<<<<<<switch state changed")
-    #             print(f"Switch State: {self.obs['scene_obs']['switch_state']}")
-    #             print(f"The action is {self.action}")
-    #
-    #
-    #
-    #
-    #
-    #     #
-    #     #
-    #     # # Calculate average positions if sufficient data points are collected
-    #     # for key, buffer in self.position_buffers.items():
-    #     #     if len(buffer) >= 2:  # Use 2 recent data points to estimate position
-    #     #         avg_position = np.mean(buffer[-5:], axis=0).tolist()
-    #     #         self.object_positions[key] = avg_position
-    #     #         print(f">>>>>>>>>>>>>>>>>>>>{key.capitalize()} position estimated at: {avg_position}")
-    #     #         # Clear the buffer after estimating the position
-    #     #         self.position_buffers[key] = []
 
 
     def frames2video(self, pri_type):
@@ -491,7 +426,7 @@ class Low_level_planner:
 
     def load_policy(self):
         model = self.model
-        model.eval()  # Set the model to evaluation mode
+        #model.eval()  # Set the model to evaluation mode
         return model
 
     def load_models(self):
