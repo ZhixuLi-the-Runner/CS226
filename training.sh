@@ -1,12 +1,12 @@
 #
 
 # designate the path to the training config, dataset, and training script
-training_config="/home/jiachenl/cs226/bc.json"
+training_config="/home/jiachenl/cs226/Config/bc.json"
 train_py_file="/home/jiachenl/cs226/robomimic/robomimic/scripts/train.py"
 
 
 # read dataset file paths from a txt file and store them in the datasets variable
-dataset_file="/home/jiachenl/cs226/demo_paths.txt"
+dataset_file="/home/jiachenl/cs226/Config/demo_paths.txt"
 datasets=$(cat "$dataset_file")
 
 

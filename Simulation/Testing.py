@@ -28,8 +28,8 @@ class Low_level_planner:
 
         self.annotator = None
         self.video = None
-        self.models_dir = "./model_epoch_200.pth"  # 模型路径
-        self.cur_demo_dir= "./env_demo.hdf5"  # 演示数据路径
+        self.models_dir = "./Config/model_epoch_200.pth"  # 模型路径
+        self.cur_demo_dir= "./Config/env_demo.hdf5"  # 演示数据路径
         self.action= None
 
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
