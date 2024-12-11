@@ -1,15 +1,23 @@
-# CS226 Project
-## Group: 
-Name: Saturday
+# CS226 Project:  Facilitate Robot Learning with the Help of Big-Data Management Tools
+## Group Name: Saturday
+## Group #: 16
+## Members:
+|Name|Email|Sid|
+|---|---|---|
+|Zhixu Li| zli538@ucr.edu| 862468106|
+|Chengkun Lyu|clyu014@ucr.edu| 862466258|
+|Zhaorui Yang| zyang247@ucr.edu| 862467859|
+|Shuhuai Deng| sdeng006@ucr.edu| 861228533|
+|Dawen Wang| dwang245@ucr.edu|862549054|
+## Member Contribution
 
-Members:
-
-Zhixu Li
-
-Zhaorui Yang
-
-
-...
+|Name| Contribution                                              |
+|---|-----------------------------------------------------------|
+|Zhixu Li| Robot environment building, model training, model testing |
+|Chengkun Lyu| Data preprocessing logic designing and implementation     |
+|Zhaorui Yang| Data filtering , curation designing and implementation    |
+|Shuhuai Deng| Scalable pipeline designing and implementation            |
+|Dawen Wang| Code testing and debugging                                |
 
 
 ## 1.Env installation
