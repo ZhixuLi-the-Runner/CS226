@@ -52,6 +52,7 @@ To process the original data, you need to install spark and pyspark following th
 
 Then you can run the following python scripts once you modify the data path for them:
 ```bash
+python data_preprocessing.py
 python random_trim.py
 spark-submit validate_with_spark.py
 ```
